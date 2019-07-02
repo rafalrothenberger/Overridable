@@ -50,6 +50,13 @@ defmodule Overridable.Strategy.SchnorrGroup do
     result == "#{p} is prime\n"
   end
 
+  def random_safe_prime_openssl(bits) do
+    {p, _} = System.cmd("openssl", ["prime", "-bits", "#{bits}", "-generate", "-safe"])
+    p = String.trim(p, "\n")
+    {p, ""} = Integer.parse(p)
+    p
+  end
+
   def random_prime_openssl(bits) do
     {p, _} = System.cmd("openssl", ["prime", "-bits", "#{bits}", "-generate"])
     p = String.trim(p, "\n")
@@ -58,7 +65,11 @@ defmodule Overridable.Strategy.SchnorrGroup do
   end
 
   def gen_params(bits, r \\ 2) do
-    p = random_prime_openssl(bits)
+    p = if r == 2 do
+      random_safe_prime_openssl(bits)
+    else
+      random_prime_openssl(bits)
+    end
 
     q = div(p, r)
 
@@ -124,7 +135,23 @@ defmodule Overridable.Strategy.SchnorrGroup do
     {:q, mod(a * b, q),  {p, q, g}}
   end
 
+  def over_mul({:q, b,  {p, q, g}}, a) when is_integer(a) do
+    {:q, mod(a * b, q),  {p, q, g}}
+  end
+
+  def over_mul(a, {:q, b,  {p, q, g}}) when is_integer(a) do
+    {:q, mod(a * b, q),  {p, q, g}}
+  end
+
   def over_mul({:p, a,  {p, q, g}}, {:p, b,  {p, q, g}}) do
+    {:p, mod(a * b, p),  {p, q, g}}
+  end
+
+  def over_mul({:p, b,  {p, q, g}}, a) when is_integer(a) do
+    {:p, mod(a * b, p),  {p, q, g}}
+  end
+
+  def over_mul(a, {:p, b,  {p, q, g}}) when is_integer(a) do
     {:p, mod(a * b, p),  {p, q, g}}
   end
 
@@ -176,6 +203,14 @@ defmodule Overridable.Strategy.SchnorrGroup do
     {:p, pow(a, b, p),  {p, q, g}}
   end
 
+  def over_pow(a, {:q, b,  {p, q, g}}) when is_integer(a) do
+    {:p, pow(a, b, p),  {p, q, g}}
+  end
+
+  def over_pow({:p, a,  {p, q, g}}, b) do
+    {:p, pow(a, b, p),  {p, q, g}}
+  end
+
   def over_neg({:q, a,  {p, q, g}}) do
     {:q, mod(-a, q),  {p, q, g}}
   end
@@ -205,7 +240,7 @@ defmodule Overridable.Strategy.SchnorrGroup do
   end
 
   def random_q({:overridable,__MODULE__,a}) do
-    random_q(a)
+    {:overridable, __MODULE__, random_q(a)}
   end
 
   def random_q({_, _,  {p, q, g}}) do
@@ -213,7 +248,7 @@ defmodule Overridable.Strategy.SchnorrGroup do
   end
 
   def random_p({:overridable,__MODULE__,a}) do
-    random_p(a)
+    {:overridable, __MODULE__, random_p(a)}
   end
 
   def random_p({_, _,  {p, q, g}}) do
